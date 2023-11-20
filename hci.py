@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from itertools import chain
 import struct
 
+from typing import Dict, Optional
 
 LE_OPCODE_DESC = {
     0x0406: "HCI Disconnect",
@@ -103,8 +104,8 @@ def get_le_subevent_desc(subevent):
     return LE_SUBEVENT_DESC.get(subevent, f"Unknown LE Event 0x{subevent:x}")
 
 class Packet(ABC):
-    HEADER_FMT = None
-    RESULT_TYPES = None
+    HEADER_FMT: str
+    RESULT_TYPES: Dict[str, str]
 
     def __init__(self):
         assert self.HEADER_FMT
