@@ -1,4 +1,4 @@
-from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame
+from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame, ChoicesSetting
 
 from abc import ABC, abstractmethod, abstractproperty
 from itertools import chain
@@ -313,6 +313,81 @@ class BlueNrgHla(HighLevelAnalyzer):
 
             return out_frame
         elif frame.type == 'error':
+            return AnalyzerFrame('low_level_error', frame.start_time, frame.end_time, {})
+        else:
+            pass
+
+class EspHostedHla(HighLevelAnalyzer):
+    HEADER_FMT = "<BBHHHBHB"
+
+    result_types = {
+        'low_level_error': {'format': 'Low-level error'},
+        'invalid_interface_type': {'format': 'Invalid interface type: {{data.interface}}'},
+        'non_hci': {'format': 'Non-HCI data (interface {{data.interface}})'},
+        **RESULT_TYPES,
+    }
+    direction = ChoicesSetting(['miso', 'mosi'])
+
+    def __init__(self):
+        self.decoder = PacketDecoder()
+        self.state = None
+        self.header_start_time = None
+        self.header_bytes = b''
+
+    def decode_header(self, end_time):
+        interface, flags, length, offset, checksum, reserved, seq_num, type = struct.unpack(self.HEADER_FMT, self.header_bytes)
+        if interface == 0xFF or length == 0:
+            # dummy
+            self.state = 'end'
+            return
+        elif interface == 3:
+            self.state = 'hci'
+        elif interface in [0, 1, 2, 4]:
+            self.state = 'end'
+            return AnalyzerFrame('non_hci', self.header_start_time, end_time, {'interface': interface})
+        else:
+            self.state = 'end'
+            return AnalyzerFrame('invalid_interface_type', self.header_start_time, end_time, {'interface': interface})
+
+        if offset != struct.calcsize(self.HEADER_FMT):
+            self.state = 'end'
+            return
+
+        self.payload_len = length
+        if self.direction == 'mosi':
+            # for host->ESP communication, the packet type is given in the last byte of the header, for ESP->host,
+            # that field is 0x00 and the packet type is given in the first data byte
+            out_frame = self.decoder.decode(bytes([type]), self.header_start_time, end_time)
+            if out_frame is not None:
+                self.state = 'end'
+                return out_frame
+
+    def decode(self, frame: AnalyzerFrame):
+        if frame.type == 'enable':
+            self.state = None
+            self.header_bytes = b''
+        elif frame.type == 'result' and self.state != 'end':
+            data = frame.data[self.direction]
+            if self.state is None:
+                if not self.header_bytes:
+                    self.header_start_time = frame.start_time
+
+                self.header_bytes += data
+                if len(self.header_bytes) == struct.calcsize(self.HEADER_FMT):
+                    return self.decode_header(frame.end_time)
+                return
+            elif self.state != 'hci':
+                return
+
+            out_frame = self.decoder.decode(data, self.header_start_time, frame.end_time)
+            if out_frame is None:
+                return
+
+            self.state = 'end'
+
+            return out_frame
+        elif frame.type == 'error':
+            self.state = 'end'
             return AnalyzerFrame('low_level_error', frame.start_time, frame.end_time, {})
         else:
             pass

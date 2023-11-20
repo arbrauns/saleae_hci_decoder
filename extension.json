@@ -12,6 +12,10 @@
     "SPI HCI (BlueNRG/Zephyr)": {
       "type": "HighLevelAnalyzer",
       "entryPoint": "hci.BlueNrgHla"
+    },
+    "ESP-hosted SPI": {
+      "type": "HighLevelAnalyzer",
+      "entryPoint": "hci.EspHostedHla"
     }
   }
 }
