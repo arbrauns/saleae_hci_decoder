@@ -156,8 +156,9 @@ class AsynchronousDataPacket(Packet):
         data_len, cid = struct.unpack("<HH", self._data[:4])
         data = self._data[4:]
         assert data_len == len(data)
-        if data_len > 4:
-            data_bytes_str = ''.join([f"{b:02X}" for b in data[:4]]) + "..."
+        max_data_len = 20
+        if data_len > max_data_len:
+            data_bytes_str = ''.join([f"{b:02X}" for b in data[:max_data_len]]) + "..."
         else:
             data_bytes_str = ''.join([f"{b:02X}" for b in data])
         return AnalyzerFrame('async', start_time, end_time, {
