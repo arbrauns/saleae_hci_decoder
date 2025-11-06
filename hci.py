@@ -13,6 +13,7 @@ LE_OPCODE_DESC = {
     0x0C01: "HCI Set Event Mask",
     0x0C03: "HCI Reset",
     0x0C2D: "HCI Read Transmit Power Level",
+    0x0C6D: "LE Request Peer SCA command",
 
     0x1001: "HCI Read Local Version Information",
     0x1002: "HCI Read Local Supported Commands",
