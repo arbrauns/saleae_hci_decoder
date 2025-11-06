@@ -152,19 +152,31 @@ class AsynchronousDataPacket(Packet):
     RESULT_TYPES = {'async': "{{data.packet_type}} (CID={{data.cid}}, length={{data.length}}, data={{data.data}})"}
 
     def get_analyzer_frame(self, start_time, end_time):
-        assert len(self._data) >= 4
-        data_len, cid = struct.unpack("<HH", self._data[:4])
-        data = self._data[4:]
-        assert data_len == len(data)
-        max_data_len = 20
-        if data_len > max_data_len:
-            data_bytes_str = ''.join([f"{b:02X}" for b in data[:max_data_len]]) + "..."
+        handle_flags, acl_data_len = self._header
+        handle = handle_flags & 0x3f
+        pb_flag = (handle_flags >> 12) & 0x03
+        bc_flag = (handle_flags >> 14) & 0x03
+
+        is_continuation = pb_flag == 0x01
+        if is_continuation:
+            payload = self._data
+            cid = "?"
         else:
-            data_bytes_str = ''.join([f"{b:02X}" for b in data])
+            # parse L2CAP header
+            assert len(self._data) >= 4
+            pdu_len, cid = struct.unpack("<HH", self._data[:4])
+            payload = self._data[4:]
+            assert pdu_len >= len(payload)
+
+        max_data_len = 20
+        data_bytes_str = ''.join([f"{b:02X}" for b in payload[:max_data_len]])
+        if len(payload) > max_data_len:
+            data_bytes_str += "..."
+
         return AnalyzerFrame('async', start_time, end_time, {
-            'packet_type': "Async Data",
+            'packet_type': "Async Data Continuation" if is_continuation else "Async Data",
             'cid': cid,
-            'length': data_len,
+            'length': len(payload),
             'data': data_bytes_str,
         })
 
